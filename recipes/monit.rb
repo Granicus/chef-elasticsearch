@@ -1,5 +1,7 @@
 # Add Monit configuration file via the `monitrc` definition
 #
+include_recipe 'monit'
+
 begin
   monitrc "elasticsearch" do
     template_cookbook "elasticsearch"
