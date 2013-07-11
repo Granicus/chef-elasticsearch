@@ -20,7 +20,7 @@ default.elasticsearch[:download_url]  = [node.elasticsearch[:host], node.elastic
 
 # === NAMING
 #
-default.elasticsearch[:cluster][:name] = 'elasticsearch'
+default.elasticsearch[:cluster][:name] = default.elasticsearch[:cluster][:name] || settings['cluster']['name']
 default.elasticsearch[:node][:name]    = node.name
 
 # === USER & PATHS
