@@ -11,6 +11,7 @@ include_recipe "ark"
 #
 group node.elasticsearch[:user] do
   action :create
+  system true
 end
 
 user node.elasticsearch[:user] do
@@ -20,23 +21,31 @@ user node.elasticsearch[:user] do
   gid     node.elasticsearch[:user]
   supports :manage_home => false
   action  :create
+  system true
 end
 
 # FIX: Work around the fact that Chef creates the directory even for `manage_home: false`
 bash "remove the elasticsearch user home" do
   user    'root'
   code    "rm -rf  #{node.elasticsearch[:dir]}/elasticsearch"
-  only_if "test -d #{node.elasticsearch[:dir]}/elasticsearch"
+  not_if  { ::File.symlink?("#{node.elasticsearch[:dir]}/elasticsearch") } 
+  only_if { ::File.directory?("#{node.elasticsearch[:dir]}/elasticsearch") }
 end
+
 
 # Create ES directories
 #
-[ node.elasticsearch[:path][:conf], node.elasticsearch[:path][:logs], node.elasticsearch[:pid_path] ].each do |path|
+[ node.elasticsearch[:path][:conf], node.elasticsearch[:path][:logs] ].each do |path|
   directory path do
     owner node.elasticsearch[:user] and group node.elasticsearch[:user] and mode 0755
     recursive true
     action :create
   end
+end
+
+directory node.elasticsearch[:pid_path] do
+  mode '0755'
+  recursive true
 end
 
 # Create data path directories
@@ -65,6 +74,9 @@ end
 
 # Download, extract, symlink the elasticsearch libraries and binaries
 #
+ark_prefix_root = node.elasticsearch[:dir] || node.ark[:prefix_root]
+ark_prefix_home = node.elasticsearch[:dir] || node.ark[:prefix_home]
+
 ark "elasticsearch" do
   url   node.elasticsearch[:download_url]
   owner node.elasticsearch[:user]
@@ -72,12 +84,22 @@ ark "elasticsearch" do
   version node.elasticsearch[:version]
   has_binaries ['bin/elasticsearch', 'bin/plugin']
   checksum node.elasticsearch[:checksum]
+  prefix_root   ark_prefix_root
+  prefix_home   ark_prefix_home
 
-  notifies :start,   'service[elasticsearch]'
-  notifies :restart, 'service[elasticsearch]'
+  notifies :start,   'service[elasticsearch]' unless node.elasticsearch[:skip_start]
+  notifies :restart, 'service[elasticsearch]' unless node.elasticsearch[:skip_restart]
+
+  not_if do
+    link   = "#{node.elasticsearch[:dir]}/elasticsearch"
+    target = "#{node.elasticsearch[:dir]}/elasticsearch-#{node.elasticsearch[:version]}"
+    binary = "#{target}/bin/elasticsearch"
+
+    ::File.directory?(link) && ::File.symlink?(link) && ::File.readlink(link) == target && ::File.exists?(binary)
+  end
 end
 
-# Increase open file limits
+# Increase open file and memory limits
 #
 bash "enable user limits" do
   user 'root'
@@ -89,20 +111,13 @@ bash "enable user limits" do
   not_if { ::File.read("/etc/pam.d/su").match(/^session    required   pam_limits\.so/) }
 end
 
-bash "increase limits for the elasticsearch user" do
-  user 'root'
+log "increase limits for the elasticsearch user"
 
-  code <<-END.gsub(/^    /, '')
-    echo '#{node.elasticsearch.fetch(:user, "elasticsearch")}     -    nofile    #{node.elasticsearch[:limits][:nofile]}'  >> /etc/security/limits.conf
-    echo '#{node.elasticsearch.fetch(:user, "elasticsearch")}     -    memlock   #{node.elasticsearch[:limits][:memlock]}' >> /etc/security/limits.conf
+file "/etc/security/limits.d/10-elasticsearch.conf" do
+  content <<-END.gsub(/^    /, '')
+    #{node.elasticsearch.fetch(:user, "elasticsearch")}     -    nofile    #{node.elasticsearch[:limits][:nofile]}
+    #{node.elasticsearch.fetch(:user, "elasticsearch")}     -    memlock   #{node.elasticsearch[:limits][:memlock]}
   END
-
-  not_if do
-    file = ::File.read("/etc/security/limits.conf")
-    file.include?("#{node.elasticsearch.fetch(:user, "elasticsearch")}     -    nofile    #{node.elasticsearch[:limits][:nofile]}") \
-    &&           \
-    file.include?("#{node.elasticsearch.fetch(:user, "elasticsearch")}     -    memlock   #{node.elasticsearch[:limits][:memlock]}")
-  end
 end
 
 # Create file with ES environment variables
@@ -112,7 +127,7 @@ template "elasticsearch-env.sh" do
   source "elasticsearch-env.sh.erb"
   owner node.elasticsearch[:user] and group node.elasticsearch[:user] and mode 0755
 
-  notifies :restart, 'service[elasticsearch]'
+  notifies :restart, 'service[elasticsearch]' unless node.elasticsearch[:skip_restart]
 end
 
 # Create ES config file
@@ -122,7 +137,7 @@ template "elasticsearch.yml" do
   source "elasticsearch.yml.erb"
   owner node.elasticsearch[:user] and group node.elasticsearch[:user] and mode 0755
 
-  notifies :restart, 'service[elasticsearch]'
+  notifies :restart, 'service[elasticsearch]' unless node.elasticsearch[:skip_restart]
 end
 
 # Create ES logging file
@@ -132,5 +147,5 @@ template "logging.yml" do
   source "logging.yml.erb"
   owner node.elasticsearch[:user] and group node.elasticsearch[:user] and mode 0755
 
-  notifies :restart, 'service[elasticsearch]'
+  notifies :restart, 'service[elasticsearch]' unless node.elasticsearch[:skip_restart]
 end

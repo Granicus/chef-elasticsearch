@@ -20,10 +20,10 @@ aws = Chef::DataBagItem.load('elasticsearch', 'aws')[node.chef_environment] resc
 #      ec2:
 #         groups: <REPLACE>
 #
-# Instead of using AWS access tokens, you can create the instance with a IAM role.
-# See: http://aws.amazon.com/iam/faqs/#How_do_i_get_started_with_IAM_roles_for_EC2_instances
+# Instead of using AWS access tokens, you can create the instance with a IAM role;
+# see: http://docs.aws.amazon.com/IAM/latest/UserGuide/role-usecase-ec2app.html
 
-default.elasticsearch['plugins']['elasticsearch-cloud-aws']['version'] = '1.11.0'
+default.elasticsearch['plugins']['elasticsearch/elasticsearch-cloud-aws']['version'] = '1.14.0'
 
 # === AWS ===
 # AWS configuration is set based on data bag values.
@@ -31,13 +31,12 @@ default.elasticsearch['plugins']['elasticsearch-cloud-aws']['version'] = '1.11.0
 #
 default.elasticsearch[:gateway][:type]               = ( aws['gateway']['type']                rescue nil )
 default.elasticsearch[:discovery][:type]             = ( aws['discovery']['type']              rescue nil )
-default.elasticsearch[:gateway][:s3][:bucket]        = ( aws['gateway']['s3']['bucket']        rescue nil )
-default.elasticsearch[:discovery][:ec2][:groups]     = ( aws['discovery']['ec2']['group']      rescue nil )
+default.elasticsearch[:discovery][:ec2][:groups]     = ( aws['discovery']['ec2']['groups']     rescue nil )
 default.elasticsearch[:discovery][:ec2][:tag]        = ( aws['discovery']['ec2']['tag']        rescue {} )
 
 default.elasticsearch[:cloud][:aws][:access_key]     = ( aws['cloud']['aws']['access_key']     rescue nil )
 default.elasticsearch[:cloud][:aws][:secret_key]     = ( aws['cloud']['aws']['secret_key']     rescue nil )
 default.elasticsearch[:cloud][:aws][:region]         = ( aws['cloud']['aws']['region']         rescue nil )
-default.elasticsearch[:cloud][:ec2][:endpoint]       = ( aws['cloud']['ec2']['endpoint']       rescue nil )
+default.elasticsearch[:cloud][:aws][:ec2][:endpoint] = ( aws['cloud']['aws']['ec2']['endpoint'] rescue nil )
 
 default.elasticsearch[:cloud][:node][:auto_attributes] = true
